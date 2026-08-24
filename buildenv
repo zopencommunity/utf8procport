@@ -100,8 +100,13 @@ int main(void) {
 
     /* NFC composes e + combining acute into the single codepoint above. This
        is the operation callers actually want from this library, and the one
-       that would break first if the tables were mis-built. */
-    utf8proc_uint8_t *nfc = utf8proc_NFC((const utf8proc_uint8_t *)"e\xcc\x81");
+       that would break first if the tables were mis-built.
+
+       Every byte is written as a hex escape, including the plain "e". This
+       source is compiled EBCDIC, so a literal 'e' is 0x85 and not 0x65, and
+       the string handed to a UTF-8 library would not be UTF-8 at all -- which
+       fails as a normalisation bug and looks exactly like a broken port. */
+    utf8proc_uint8_t *nfc = utf8proc_NFC((const utf8proc_uint8_t *)"\x65\xcc\x81");
     check("NFC composes e + combining acute",
           nfc != NULL && strcmp((const char *)nfc, "\xc3\xa9") == 0);
     free(nfc);
