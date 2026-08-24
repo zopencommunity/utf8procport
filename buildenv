@@ -119,7 +119,8 @@ int main(void) {
 }
 CHECKEOF
   chtag -tc IBM-1047 /tmp/zopen_utf8proc_check.c 2> /dev/null
-  _up_cc="${CC:-clang}"
+  # The same compiler the configure used; CC is not set here (see above).
+  _up_cc="${ZOPEN_CLANG}"
   if ! "${_up_cc}" -m64 -I"${_up_dir}/include" \
        /tmp/zopen_utf8proc_check.c -L"${_up_dir}/lib" -lutf8proc \
        -o /tmp/zopen_utf8proc_check 2>&1; then
