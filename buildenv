@@ -18,45 +18,16 @@ export ZOPEN_CATEGORIES="development library"
 
 export ZOPEN_STABLE_URL="https://github.com/JuliaStrings/utf8proc.git"
 export ZOPEN_STABLE_TAG="v${UTF8PROC_VERSION}"
-export ZOPEN_STABLE_DEPS="make cmake"
+export ZOPEN_STABLE_DEPS="zoslib make cmake"
 
 export ZOPEN_DEV_URL="https://github.com/JuliaStrings/utf8proc.git"
 export ZOPEN_DEV_DEPS="${ZOPEN_STABLE_DEPS}"
 
-# Pure C with no OS calls beyond the standard library; zoslib is not needed.
-export ZOPEN_DONT_ADD_ZOSLIB_DEP=1
 export ZOPEN_COMP="CLANG"
 
-# Name the compiler explicitly.
-#
-# CMake otherwise finds /bin/cc and /bin/c++, the legacy drivers, and two
-# things go wrong: /bin/c++ rejects the .cxx suffix CMake writes its own
-# compiler probe with --
-#
-#   FSUM3010 Specify a file with the correct suffix (.C, .hh, .i, .c, ...)
-#
-# -- and /bin/cc rejects the clang flags the build carries:
-#
-#   FSUM3007 -t is not a valid option.
-#
-# Neither error names the compiler choice, so both read as a broken port. CC
-# and CXX are not exported into a CMake port's environment here, so resolving
-# the path is left to the port. The glob keeps this working across compiler
-# levels; an explicit CC in the environment still wins.
-if [ -z "${CC}" ] || [ ! -x "${CC}" ]; then
-  ZOPEN_CLANG=$(ls -1 /usr/lpp/IBM/oelcpp/*/bin/clang 2> /dev/null | tail -1)
-else
-  ZOPEN_CLANG="${CC}"
-fi
-if [ -z "${ZOPEN_CLANG}" ] || [ ! -x "${ZOPEN_CLANG}" ]; then
-  echo "Could not find a clang to build with; set CC" >&2
-  return 4
-fi
-ZOPEN_CLANGXX="${ZOPEN_CLANG}++"
-[ -x "${ZOPEN_CLANGXX}" ] || ZOPEN_CLANGXX="${ZOPEN_CLANG}"
 
 export ZOPEN_CONFIGURE="cmake"
-export ZOPEN_CONFIGURE_OPTS="-DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=${ZOPEN_CLANG} -DCMAKE_CXX_COMPILER=${ZOPEN_CLANGXX} -DUTF8PROC_INSTALL=ON -DBUILD_SHARED_LIBS=OFF -B ../build --install-prefix \"\$ZOPEN_INSTALL_DIR/\" ."
+export ZOPEN_CONFIGURE_OPTS="-DCMAKE_BUILD_TYPE=Release -DUTF8PROC_INSTALL=ON -DBUILD_SHARED_LIBS=OFF -B ../build --install-prefix \"\$ZOPEN_INSTALL_DIR/\" ."
 export ZOPEN_MAKE="cmake"
 export ZOPEN_MAKE_OPTS="--build ../build --parallel \$ZOPEN_NUM_JOBS --config Release"
 export ZOPEN_MAKE_MINIMAL=Y
@@ -124,10 +95,14 @@ int main(void) {
 }
 CHECKEOF
   chtag -tc IBM-1047 /tmp/zopen_utf8proc_check.c 2> /dev/null
-  # The same compiler the configure used; CC is not set here (see above).
-  _up_cc="${ZOPEN_CLANG}"
-  if ! "${_up_cc}" -m64 -I"${_up_dir}/include" \
-       /tmp/zopen_utf8proc_check.c -L"${_up_dir}/lib" -lutf8proc \
+  # Built with the port's own flags, for the same reason snappyport's check
+  # is: a check compiled with bare defaults is not testing the artifact that
+  # ships. C has no name mangling so this one would link either way, which is
+  # exactly why it is worth being deliberate about.
+  _up_cc="${CC:-clang}"
+  # shellcheck disable=SC2086
+  if ! "${_up_cc}" ${CFLAGS} -I"${_up_dir}/include" \
+       /tmp/zopen_utf8proc_check.c -L"${_up_dir}/lib" -lutf8proc ${LDFLAGS} ${LIBS} \
        -o /tmp/zopen_utf8proc_check 2>&1; then
     printSoftError "Could not build the check against the installed library"
     return 1
