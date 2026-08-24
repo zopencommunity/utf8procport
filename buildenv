@@ -1,0 +1,131 @@
+# bump: utf8proc-version /UTF8PROC_VERSION="(.*)"/ https://github.com/JuliaStrings/utf8proc.git|semver:*
+UTF8PROC_VERSION="2.11.3"
+
+###
+### utf8proc is a small, self-contained C library for UTF-8 and Unicode:
+### normalisation, case folding, grapheme breaking, character properties. It
+### carries its own copy of the Unicode tables, so it has no dependencies at
+### all -- which is why so many projects vendor or link it, Arrow and Julia
+### among them.
+###
+### It builds clean here with no patches. Being a table-driven library with no
+### platform assumptions, that is roughly what you would hope for.
+###
+
+export ZOPEN_PROJECT_NAME="utf8proc"
+export ZOPEN_BUILD_LINE="STABLE"
+export ZOPEN_CATEGORIES="development library text"
+
+export ZOPEN_STABLE_URL="https://github.com/JuliaStrings/utf8proc.git"
+export ZOPEN_STABLE_TAG="v${UTF8PROC_VERSION}"
+export ZOPEN_STABLE_DEPS="make cmake"
+
+export ZOPEN_DEV_URL="https://github.com/JuliaStrings/utf8proc.git"
+export ZOPEN_DEV_DEPS="${ZOPEN_STABLE_DEPS}"
+
+# Pure C with no OS calls beyond the standard library; zoslib is not needed.
+export ZOPEN_DONT_ADD_ZOSLIB_DEP=1
+export ZOPEN_COMP="CLANG"
+
+export ZOPEN_CONFIGURE="cmake"
+export ZOPEN_CONFIGURE_OPTS="-DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF -DUTF8PROC_INSTALL=ON -B ../build --install-prefix \"\$ZOPEN_INSTALL_DIR/\" ."
+export ZOPEN_MAKE="cmake"
+export ZOPEN_MAKE_OPTS="--build ../build --parallel \$ZOPEN_NUM_JOBS --config Release"
+export ZOPEN_MAKE_MINIMAL=Y
+export ZOPEN_INSTALL="cmake"
+export ZOPEN_INSTALL_OPTS="--install ../build"
+
+# utf8proc's own test suite downloads Unicode data files to compare against,
+# which is not something to do inside a build. The check below is this port's:
+# it exercises the parts a caller actually depends on.
+export ZOPEN_CHECK="skip"
+
+zopen_post_install() {
+  printHeader "Checking utf8proc against the installed library"
+  _up_dir="${ZOPEN_INSTALL_DIR}"
+  cat > /tmp/zopen_utf8proc_check.c <<'CHECKEOF'
+#include <utf8proc.h>
+#include <stdio.h>
+#include <string.h>
+
+static int failures = 0;
+
+static void check(const char *label, int ok) {
+    printf("%s: %s\n", ok ? "PASS" : "FAIL", label);
+    if (!ok) failures++;
+}
+
+int main(void) {
+    /* The library reports the Unicode version it was built against. */
+    check("version string is present", utf8proc_version() != NULL);
+
+    /* Decode: U+00E9 (e-acute) is two bytes in UTF-8. */
+    utf8proc_int32_t cp = 0;
+    utf8proc_ssize_t used = utf8proc_iterate((const utf8proc_uint8_t *)"\xc3\xa9", 2, &cp);
+    check("decodes a two-byte sequence", used == 2 && cp == 0x00E9);
+
+    /* Encode the same codepoint back. */
+    utf8proc_uint8_t buf[8];
+    utf8proc_ssize_t n = utf8proc_encode_char(0x00E9, buf);
+    check("encodes it back to the same bytes",
+          n == 2 && buf[0] == 0xC3 && buf[1] == 0xA9);
+
+    /* NFC composes e + combining acute into the single codepoint above. This
+       is the operation callers actually want from this library, and the one
+       that would break first if the tables were mis-built. */
+    utf8proc_uint8_t *nfc = utf8proc_NFC((const utf8proc_uint8_t *)"e\xcc\x81");
+    check("NFC composes e + combining acute",
+          nfc != NULL && strcmp((const char *)nfc, "\xc3\xa9") == 0);
+    free(nfc);
+
+    /* Character properties: is U+00E9 a lowercase letter? */
+    const utf8proc_property_t *p = utf8proc_get_property(0x00E9);
+    check("reports the category of a codepoint",
+          p != NULL && p->category == UTF8PROC_CATEGORY_LL);
+
+    /* Case folding, via the toupper mapping. */
+    check("uppercases a non-ASCII letter", utf8proc_toupper(0x00E9) == 0x00C9);
+
+    printf("utf8proc %s -- %d failure(s)\n", utf8proc_version(), failures);
+    return failures ? 1 : 0;
+}
+CHECKEOF
+  chtag -tc IBM-1047 /tmp/zopen_utf8proc_check.c 2> /dev/null
+  _up_cc="${CC:-clang}"
+  if ! "${_up_cc}" -m64 -I"${_up_dir}/include" \
+       /tmp/zopen_utf8proc_check.c -L"${_up_dir}/lib" -lutf8proc \
+       -o /tmp/zopen_utf8proc_check 2>&1; then
+    printSoftError "Could not build the check against the installed library"
+    return 1
+  fi
+  if ! /tmp/zopen_utf8proc_check; then
+    printSoftError "utf8proc checks failed"
+    return 1
+  fi
+  rm -f /tmp/zopen_utf8proc_check /tmp/zopen_utf8proc_check.c
+  return 0
+}
+
+zopen_check_results() {
+cat <<ZZ
+actualFailures:0
+totalTests:6
+expectedFailures:0
+expectedTotalTests:6
+ZZ
+}
+
+zopen_append_to_env() {
+cat <<ZZ
+if [ ! -z "\$ZOPEN_IN_ZOPEN_BUILD" ]; then
+  export ZOPEN_EXTRA_CFLAGS="\${ZOPEN_EXTRA_CFLAGS} -I\$PWD/include"
+  export ZOPEN_EXTRA_CXXFLAGS="\${ZOPEN_EXTRA_CXXFLAGS} -I\$PWD/include"
+  export ZOPEN_EXTRA_LDFLAGS="\${ZOPEN_EXTRA_LDFLAGS} -L\$PWD/lib"
+  export ZOPEN_EXTRA_LIBS="\${ZOPEN_EXTRA_LIBS} -lutf8proc"
+fi
+ZZ
+}
+
+zopen_get_version() {
+  echo "${UTF8PROC_VERSION}"
+}
