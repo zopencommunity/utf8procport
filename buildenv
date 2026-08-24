@@ -14,7 +14,7 @@ UTF8PROC_VERSION="2.11.3"
 
 export ZOPEN_PROJECT_NAME="utf8proc"
 export ZOPEN_BUILD_LINE="STABLE"
-export ZOPEN_CATEGORIES="development library text"
+export ZOPEN_CATEGORIES="development library"
 
 export ZOPEN_STABLE_URL="https://github.com/JuliaStrings/utf8proc.git"
 export ZOPEN_STABLE_TAG="v${UTF8PROC_VERSION}"
