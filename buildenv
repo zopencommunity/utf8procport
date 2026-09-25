@@ -1,5 +1,5 @@
 # bump: utf8proc-version /UTF8PROC_VERSION="(.*)"/ https://github.com/JuliaStrings/utf8proc.git|semver:*
-UTF8PROC_VERSION="2.11.3"
+UTF8PROC_VERSION="2.12.0"
 
 ###
 ### utf8proc is a small, self-contained C library for UTF-8 and Unicode:
